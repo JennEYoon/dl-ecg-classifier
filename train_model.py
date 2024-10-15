@@ -27,7 +27,7 @@ def read_yaml(file, model_save_dir='', multiple=False):
     feature_root = os.path.join(os.getcwd(), 'data', 'features', args.feature_path)
     csv_root = os.path.join(os.getcwd(), 'data', 'split_csvs', args.csv_path)
     args.train_path = os.path.join(csv_root, args.train_file)
-    args.val_path = os.path.join(csv_root, args.val_file)
+    args.val_path = os.path.join(csv_root, args.val_file) if args.val_file else None
     args.yaml_file_name = os.path.splitext(file)[0]
     args.yaml_file_name = os.path.basename(args.yaml_file_name)
     
@@ -62,8 +62,13 @@ def read_yaml(file, model_save_dir='', multiple=False):
 
     # Then, load and concat the TOP<n_features> features into one dataframes from all the datasets
     args.all_features = pd.concat([pd.read_csv(os.path.join(feature_root, df), usecols=feature_names) for df in os.listdir(feature_root) if df.endswith('csv')]).reset_index(drop=True)
-    new_names = [os.path.basename(name) for name in args.all_features.file_name]
-    args.all_features.file_name = new_names # Cut only the file names from the full paths
+    
+    if len(args.all_features) == 0:
+        raise Exception('The features weren´t loaded correctly!')
+
+    if not set(feature_names).issubset(args.all_features.columns):
+        raise Exception('Not all necessary features/columns are found from the feature dataframe!')
+
     # ================================ #
     # ================================ #
 
@@ -87,8 +92,8 @@ def read_yaml(file, model_save_dir='', multiple=False):
     args.logger.info('Arguments:')
     args.logger.info('-'*10)
     for k, v in args.__dict__.items():
-        if 'features' in k:
-            args.logger.info('{}: {}'.format(k, v.columns.tolist()))
+        if 'all_features' in k:
+            args.logger.info('{} (shape={}): {}'.format(k, v.shape, v.columns.tolist()))
         else:
             args.logger.info('{}: {}'.format(k, v))
     args.logger.info('-'*10)  
@@ -120,7 +125,7 @@ def read_multiple_yamls(path):
 if __name__ == '__main__':
 
     # Seed
-    seed = 123
+    seed = 2024
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)

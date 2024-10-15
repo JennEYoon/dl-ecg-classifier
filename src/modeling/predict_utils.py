@@ -6,7 +6,7 @@ from torch import nn
 import pandas as pd
 from torch.utils.data import DataLoader
 from .models.ctn import CTN
-from ..dataloader.dataset import ECGWindowPaddingDataset
+from ..dataloader.dataset import ECGDataset, get_transforms
 from .metrics import cal_multilabel_metrics, roc_curves
 import pickle
 
@@ -34,8 +34,7 @@ class Predicting(object):
         self.filenames = [f for file in filenames for f in file]
 
         # Load the test data
-        testing_set = ECGWindowPaddingDataset(self.args.test_path, window=15*500, nb_windows=5,
-                                              filter_bandwidth=[3, 45], all_features=self.args.all_features)
+        testing_set = ECGDataset(self.args.test_path, get_transforms('test'), self.args.all_features)
         channels = testing_set.channels
         self.test_dl = DataLoader(testing_set,
                                  batch_size=1,
@@ -45,15 +44,7 @@ class Predicting(object):
         
         # Load the trained model
         self.model = CTN(in_channel=channels, out_channel=len(self.args.labels))
-
-        # Consider the GPU or CPU condition
-        if torch.cuda.is_available():
-            self.model = torch.nn.DataParallel(self.model)
-            self.model.module.load_state_dict(torch.load(self.args.model_path))
-        else:
-            self.model.load_state_dict(torch.load(self.args.model_path, map_location=self.device))
-            self.args.logger.info('here')
-
+        self.model.load_state_dict(torch.load(self.args.model_path, map_location=self.device))
         self.model.to(self.device)
 
     def predict(self):
@@ -74,6 +65,7 @@ class Predicting(object):
         history['labels'] = self.args.labels
         history['test_csv'] = self.args.test_path
         history['threshold'] = self.args.threshold
+        history['features'] = self.args.all_features.columns
         
         start_time_sec = time.time()
 
@@ -82,55 +74,16 @@ class Predicting(object):
         labels_all = torch.tensor((), device=self.device)
         logits_prob_all = torch.tensor((), device=self.device)
         
-        for i, (ecg_segs, feats_normalized, labels) in enumerate(self.test_dl):
-            ecg_segs = ecg_segs.float().to(self.device) # ECGs
-            feats_normalized = feats_normalized.float().to(self.device) # age and gender
+        for i, (ecg, feats_normalized, labels) in enumerate(self.test_dl):
+            ecg = ecg.float().to(self.device) # ECGs
+            feats_normalized = feats_normalized.float().to(self.device)
             labels = labels.float().to(self.device) # diagnoses 
             
-            logits_tmp = []
             with torch.no_grad():  
-                # Loop over each window
-                for win in ecg_segs.transpose(1, 0):
-                    logits = self.model(win, feats_normalized)
-                    logits_tmp.append(logits)
-                
-                # Take the average of the sequence windows
-                logits = torch.stack(logits_tmp).mean(dim=0)
-
-            # Collect probs and labels 
-            logits_prob = logits.sigmoid().data                        
-            labels_all = torch.cat((labels_all, labels), 0)
-            logits_prob_all = torch.cat((logits_prob_all, logits_prob), 0)
-
-            '''
-            # ------ One-hot-encode predicted label -----------
-            # Define an empty label for predictions
-            pred_label = np.zeros(len(self.args.labels))
-
-            # Find the maximum values within the probabilities
-            _, likeliest_dx = torch.max(logits_prob, 1)
-
-            # Predicted probabilities from tensor to numpy
-            likeliest_dx = likeliest_dx.cpu().detach().numpy()
-
-            # First, add the most likeliest diagnosis to the predicted label
-            pred_label[likeliest_dx] = 1
-
-            # Then, add all the others that are above the decision threshold
-            other_dx = logits_prob.cpu().detach().numpy() >= self.args.threshold
-            pred_label = pred_label + other_dx
-            pred_label[pred_label > 1.1] = 1
-            pred_label = np.squeeze(pred_label)
-
-            # --------------------------------------------------
-            
-            # Save also probabilities but return them first in numpy
-            scores = logits_prob.cpu().detach().numpy()
-            scores = np.squeeze(scores)
-            
-            # Save the prediction
-            self.save_predictions(self.filenames[i], pred_label, scores, self.args.pred_save_dir)
-            '''
+                logits = self.model(ecg, feats_normalized)
+                logits_prob = logits.sigmoid().data                        
+                labels_all = torch.cat((labels_all, labels), 0)
+                logits_prob_all = torch.cat((logits_prob_all, logits_prob), 0)
 
             if i % 1000 == 0:
                 self.args.logger.info('{:<4}/{:>4} predictions made'.format(i+1, len(self.test_dl)))
@@ -161,6 +114,21 @@ class Predicting(object):
                                         self.args.yaml_file_name + '_test_history.pickle')
         with open(history_savepath, mode='wb') as file:
             pickle.dump(history, file, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # Store labels and logits
+        filenames = [os.path.basename(file) for file in self.filenames]
+        
+        logits_csv_path = os.path.join(self.args.output_dir,
+                                        self.args.yaml_file_name + '_test_logits.csv') 
+        logits_numpy = logits_prob_all.cpu().detach().numpy().astype(np.float32)
+        logits_df = pd.DataFrame(logits_numpy, columns=self.args.labels, index=filenames)
+        logits_df.to_csv(logits_csv_path, sep=',')
+
+        labels_csv_path = os.path.join(self.args.output_dir,
+                                        self.args.yaml_file_name + '_test_labels.csv') 
+        labels_numpy = labels_all.cpu().detach().numpy().astype(np.float32)
+        labels_df = pd.DataFrame(labels_numpy, columns=self.args.labels, index=filenames)
+        labels_df.to_csv(labels_csv_path, sep=',')
             
         torch.cuda.empty_cache()
         

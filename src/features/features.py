@@ -12,10 +12,9 @@ from biosppy.signals import ecg
 from biosppy.signals.tools import filter_signal
 
 # Local imports
-from features.full_waveform_statistics import *
-from features.heart_rate_variability_statistics import *
-from features.template_statistics import *
-
+from src.features.full_waveform_statistics import *
+from src.features.heart_rate_variability_statistics import *
+from src.features.template_statistics import *
 
 class Features:
 
@@ -30,21 +29,18 @@ class Features:
         Sampling frequency (Hz).
     feature_groups : list
         List of feature groups to include when generating feature array.
-    labels : DataFrame
-        Training Labels.
     """
 
     available_feature_groups = [
         'full_waveform_statistics', 'heart_rate_variability_statistics', 'template_statistics'
     ]
 
-    def __init__(self, filename, data, fs, feature_groups, labels=None):
+    def __init__(self, filename, data, fs, feature_groups):
 
         # Input attributes
         self.filename = filename
         self.data = data
         self.fs = fs
-        self.labels = labels
         self.feature_groups = feature_groups
         self.features = None
 

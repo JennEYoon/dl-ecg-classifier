@@ -57,7 +57,7 @@ class Transformer(nn.Module):
 
 # 15 second model
 class CTN(nn.Module):
-    def __init__(self, in_channel, out_channel, d_model=256, nhead=8, d_ff=2048, num_layers=8, dropout_rate=0.2, deepfeat_sz=64, nb_feats=20, nb_demo=2):
+    def __init__(self, in_channel, out_channel, d_model=256, nhead=8, d_ff=2048, num_layers=8, dropout_rate=0.2, deepfeat_sz=64, nb_feats=20, nb_demo=3):
         super(CTN, self).__init__()
         
         self.encoder = nn.Sequential( # downsampling factor = 20

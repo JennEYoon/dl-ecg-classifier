@@ -41,20 +41,24 @@ def read_yaml(file, model_save_dir='', multiple=False):
     # Make a subdirectory into the output directory where to save the predictions
     args.pred_save_dir = os.path.join(args.output_dir, 'predictions')
     
-    # Make sure the directory for predictions exists
+        # Make sure the directory for predictions exists
     if not os.path.isdir(args.pred_save_dir):
         os.makedirs(args.pred_save_dir)    
 
     # Find the trained model from the ´experiments´ directory as it should be saved there
-    for root, dirs, files in os.walk(os.path.join(os.getcwd(), 'experiments')):
+    doublicate_flag = 0
+    for root, _, files in os.walk(os.path.join(os.getcwd(), 'experiments')):
         if args.model in files:
             args.model_path = os.path.join(root, args.model)
-    
+            doublicate_flag += 1
+
     # Check if model_path never set, i.e., the trained model was found
-    try:
-        args.model_path
-    except AttributeError as ne:
-        print('AttributeError:', ne, 'I.e. model not found. Check if you´ve trained one.')
+    if not hasattr(args, 'model_path'):
+        raise AttributeError('No path found for the model. Check if you have trained one.')
+
+    if doublicate_flag > 1:
+        raise Exception('There are more than one similarly named models in the experiments directory. \
+                         You should not have duplicated names so that you use correct models!')
 
     # Load labels
     args.labels = pd.read_csv(args.test_path, nrows=0).columns.tolist()[4:]
@@ -81,6 +85,13 @@ def read_yaml(file, model_save_dir='', multiple=False):
     args.all_features = pd.concat([pd.read_csv(os.path.join(feature_root, df), usecols=feature_names) for df in os.listdir(feature_root) if df.endswith('csv')]).reset_index(drop=True)
     new_names = [os.path.basename(name) for name in args.all_features.file_name]
     args.all_features.file_name = new_names # Cut only the file names from the full paths
+
+    if len(args.all_features) == 0:
+        raise Exception('The features weren´t loaded correctly!')
+    
+    if not set(feature_names).issubset(args.all_features.columns):
+        raise Exception('Not all necessary features/columns are found from the feature dataframe!')
+
     # ================================ #
     # ================================ #
     
@@ -97,7 +108,7 @@ def read_yaml(file, model_save_dir='', multiple=False):
     args.logger.info('-'*10)
     for k, v in args.__dict__.items():
         if 'features' in k:
-            args.logger.info('{}: {}'.format(k, v.columns.tolist()))
+            args.logger.info('{} (shape={}): {}'.format(k, v.shape, v.columns.tolist()))
         else:
             args.logger.info('{}: {}'.format(k, v))
     args.logger.info('-'*10) 

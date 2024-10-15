@@ -14,8 +14,8 @@ from biosppy.signals.tools import smoother
 import pywt
 
 # Local imports
-from features.tools import *
-from features.pyrem_univariate import *
+from src.features.tools import *
+from src.features.pyrem_univariate import *
 
 
 class FullWaveformStatistics:

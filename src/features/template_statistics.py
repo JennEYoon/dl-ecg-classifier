@@ -8,13 +8,13 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import scipy as sp
 from pyentrp import entropy as ent
-import features.pyeeg as pyeeg
+import src.features.pyeeg as pyeeg
 from scipy import signal
 import pywt
 from numpy import linalg
 
 # Local imports
-from features.pyrem_univariate import *
+from src.features.pyrem_univariate import *
 
 class TemplateStatistics:
 

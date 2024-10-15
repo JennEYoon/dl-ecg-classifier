@@ -9,6 +9,3 @@ lr: 0.003
 weight_decay: 1e-05
 device_count: 1
 threshold: 0.5
-filter_bandwidth: [3, 45]
-window: 7500
-nb_windows: 5

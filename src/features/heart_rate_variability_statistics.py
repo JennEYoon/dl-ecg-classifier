@@ -9,15 +9,15 @@ import numpy as np
 import scipy as sp
 from scipy import signal
 from scipy import interpolate
-import features.pyeeg as pyeeg
+import src.features.pyeeg as pyeeg
 from pyentrp import entropy as ent
 from biosppy.signals.tools import smoother
 from scipy.spatial.distance import cdist
 from sklearn.cluster import KMeans
 
 # Local imports
-from features.tools import *
-from features.pyrem_univariate import *
+from src.features.tools import *
+from src.features.pyrem_univariate import *
 
 
 class HeartRateVariabilityStatistics:
