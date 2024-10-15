@@ -20,16 +20,3 @@ I follow "Style Guide for Python Code" to code my program
 http://www.python.org/dev/peps/pep-0008/
 
 --------------------------------------------------
-
-"""
-
-from .entropy import ap_entropy, permutation_entropy, samp_entropy, spectral_entropy, svd_entropy
-from .spectrum import bin_power
-from .detrended_fluctuation_analysis import dfa
-from .embedded_sequence import embed_seq
-from .fisher_info import fisher_info
-from .fractal_dimension import hfd, pfd
-from .hjorth_mobility_complexity import hjorth
-from .hurst import hurst
-from .information_based_similarity import information_based_similarity
-from .largest_lyauponov_exponent import LLE

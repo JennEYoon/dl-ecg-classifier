@@ -9,3 +9,4 @@ h5py==3.8.0
 torch==1.13.1
 tqdm==4.64.0
 ruamel.yaml==0.17.21
+xgboost==2.0.3
