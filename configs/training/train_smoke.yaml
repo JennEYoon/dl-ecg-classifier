@@ -1,0 +1,11 @@
+train_file: train_split_1_1.csv
+val_file: val_split_1_1.csv
+csv_path: stratified_smoke
+feature_path: smoke_features
+batch_size: 10
+num_workers: 0
+epochs: 2
+lr: 0.003
+weight_decay: 1e-05
+device_count: 1
+threshold: 0.5
