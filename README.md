@@ -1,8 +1,10 @@
 # ECG classification using deep learning 
 
-The repository contains PyTorch implementations of two PhysioNet Challenge 2020 models: the ResNet model from [Zhao et al.](https://moody-challenge.physionet.org/2020/papers/112.pdf) and the Transformer model from [Natarajan et al.](https://www.cinc.org/archives/2020/pdf/CinC2020-107.pdf). Additionally, code for benchmark models, specifically Logistic regression and XGBoost, is available. 
+The repository contains the code for the experiments presented in the paper [Leinonen et al. (2024), "Empirical investigation of multi-source cross-validation in clinical ECG classification"](https://doi.org/10.1016/j.compbiomed.2024.109271).
 
-The repository has been refactored for a more generalized approach to ECG analysis. The initial codes can be found, for example, [here](https://moody-challenge.physionet.org/2020/results/).
+PyTorch implementations of two PhysioNet Challenge 2020 models are provided: the ResNet model from [Zhao et al.](https://moody-challenge.physionet.org/2020/papers/112.pdf) and the Transformer model from [Natarajan et al.](https://www.cinc.org/archives/2020/pdf/CinC2020-107.pdf). Additionally, code for benchmark models, specifically Logistic regression and XGBoost, is available. 
+
+The repository has been refactored for a more generalized approach to ECG analysis. The initial code for the neural networks can be found, for example, [here](https://moody-challenge.physionet.org/2020/results/).
 
 There are three branches, each containining either the neural network pipeline or a script to run the benchmark models
 - The `main` branch contains the ResNet pipeline
@@ -131,4 +133,18 @@ python run_model.py predict_stratified_smoke
 ├── train_model.py               # Script to train a model
 └── utils.py                     # Script for YAML configuration
 
+```
+
+# Citation
+
+```
+@article{leinonen2024empirical,
+  title={Empirical investigation of multi-source cross-validation in clinical ECG classification},
+  author={Leinonen, Tuija and Wong, David and Vasankari, Antti and Wahab, Ali and Nadarajah, Ramesh and Kaisti, Matti and Airola, Antti},
+  journal={Computers in Biology and Medicine},
+  volume={183},
+  pages={109271},
+  year={2024},
+  publisher={Elsevier}
+}
 ```
