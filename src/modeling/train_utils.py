@@ -32,7 +32,11 @@ class Training(object):
             self.args.logger.info('using {} cpu'.format(self.device_count))
 
         # Load the datasets       
-        training_set = ECGDataset(self.args.train_path, get_transforms('train'))
+        training_set = ECGDataset(self.args.train_path, get_transforms(dataset_type='train', 
+                                                                        aug_type=self.args.aug_type, 
+                                                                        precision=self.args.precision, 
+                                                                        p1=self.args.p1, 
+                                                                        p2=self.args.p2), self.args.filter_bandwidth)
         channels = training_set.channels
         self.train_dl = DataLoader(training_set,
                                    batch_size=self.args.batch_size,
@@ -42,7 +46,7 @@ class Training(object):
                                    drop_last=False)
 
         if self.args.val_path is not None:
-            validation_set = ECGDataset(self.args.val_path, get_transforms('val'))
+            validation_set = ECGDataset(self.args.val_path, get_transforms(dataset_type='val', precision=self.args.precision), self.args.filter_bandwidth)
             self.validation_files = validation_set.data
             self.val_dl = DataLoader(validation_set,
                                     batch_size=1,
@@ -51,10 +55,9 @@ class Training(object):
                                     pin_memory=(True if self.device == 'cuda' else False),
                                     drop_last=True)
 
-
         self.model = resnet18(in_channel=channels, 
                               out_channel=len(self.args.labels))
-
+        
         # Load model if necessary
         if hasattr(self.args, 'load_model_path'):
             self.model.load_state_dict(torch.load(self.args.load_model_path))
@@ -62,6 +65,7 @@ class Training(object):
         else:
             self.args.logger.info('Training a new model from the beginning.')
         
+        # Consider the GPU or CPU condition
         # If more than 1 CUDA device used, use data parallelism
         if self.device_count > 1:
             self.model = torch.nn.DataParallel(self.model) 
@@ -75,27 +79,26 @@ class Training(object):
         self.sigmoid = nn.Sigmoid()
         self.sigmoid.to(self.device)
         self.model.to(self.device)
-        
+
     def train(self):
         ''' PyTorch training loop
         '''
         
-        self.args.logger.info('train() called: model={}, opt={}(lr={}), epochs={}, device={}'.format(
-                type(self.model).__name__, 
-                type(self.optimizer).__name__,
-                self.optimizer.param_groups[0]['lr'], 
-                self.args.epochs, 
-                self.device))
+        self.args.logger.info('train() called: model={}, opt={}(lr={}), epochs={}, device={}'.format(type(self.model).__name__, 
+               type(self.optimizer).__name__,
+               self.optimizer.param_groups[0]['lr'], 
+               self.args.epochs, 
+               self.device))
         
         # Add all wanted history information
         history = {}
-        history['train_csv'] = self.args.train_path
         history['train_loss'] = []
         history['train_micro_auroc'] = []
         history['train_micro_avg_prec'] = []  
         history['train_macro_auroc'] = []
         history['train_macro_avg_prec'] = [] 
-        
+        history['train_challenge_metric'] = []
+
         if self.args.val_path is not None:
             history['val_csv'] = self.args.val_path
             history['val_loss'] = []
@@ -103,6 +106,7 @@ class Training(object):
             history['val_micro_avg_prec'] = []
             history['val_macro_auroc'] = []
             history['val_macro_avg_prec'] = []
+            history['val_challenge_metric'] = []
         
         history['labels'] = self.args.labels
         history['epochs'] = self.args.epochs
@@ -110,11 +114,12 @@ class Training(object):
         history['lr'] = self.args.lr
         history['optimizer'] = self.optimizer
         history['criterion'] = self.criterion
+        history['train_csv'] = self.args.train_path
         
         start_time_sec = time.time()
-        
         for epoch in range(1, self.args.epochs+1):
-            # --- TRAIN ON TRAINING SET ------------------------------------------
+            
+            # --- TRAIN ON TRAINING SET -----------------------------
             self.model.train()            
             train_loss = 0.0
             labels_all = torch.tensor((), device=self.device) # , device=torch.device('cuda:0')
@@ -127,7 +132,7 @@ class Training(object):
             for batch_idx, (ecgs, ag, labels) in enumerate(self.train_dl):
                 ecgs = ecgs.to(self.device) # ECGs
                 ag = ag.to(self.device) # age and gender
-                labels = labels.to(self.device) # diagnoses in SNOMED CT codes  
+                labels = labels.to(self.device) # diagnoses as binary 
                
                 with torch.set_grad_enabled(True):                    
         
@@ -143,8 +148,8 @@ class Training(object):
                     self.optimizer.zero_grad()
                     loss.backward()
                     self.optimizer.step()
-                    
-                    # Printing training information
+
+                    # self.args.logger.infoing training information
                     if step % 100 == 0:
                         batch_loss += loss_tmp
                         batch_count += ecgs.size(0)
@@ -160,15 +165,15 @@ class Training(object):
                         batch_count = 0
                     step += 1
 
-            
             train_loss = train_loss / len(self.train_dl.dataset)            
-            train_macro_avg_prec, train_micro_avg_prec, train_macro_auroc, train_micro_auroc = cal_multilabel_metrics(labels_all, logits_prob_all, self.args.labels, self.args.threshold)
+            train_macro_avg_prec, train_micro_avg_prec, train_macro_auroc, train_micro_auroc, train_challenge_metric = cal_multilabel_metrics(labels_all, logits_prob_all, self.args.labels, self.args.threshold)
 
-            self.args.logger.info('epoch {:^4}/{:^4} train loss: {:<6.2f}  train micro auroc: {:<6.2f}'.format( 
+            self.args.logger.info('epoch {:^4}/{:^4} train loss: {:<6.2f}  train micro auroc: {:<6.2f}  train challenge metric: {:<6.2f}'.format( 
                 epoch, 
                 self.args.epochs, 
                 train_loss, 
-                train_micro_auroc))
+                train_micro_auroc,
+                train_challenge_metric))
 
             # Add information for training history
             history['train_loss'].append(train_loss)
@@ -176,14 +181,16 @@ class Training(object):
             history['train_micro_avg_prec'].append(train_micro_avg_prec)
             history['train_macro_auroc'].append(train_macro_auroc)
             history['train_macro_avg_prec'].append(train_macro_avg_prec)
+            history['train_challenge_metric'].append(train_challenge_metric)
             
+
             # --- EVALUATE ON VALIDATION SET ------------------------------------- 
             if self.args.val_path is not None:
                 self.model.eval()
                 val_loss = 0.0  
                 labels_all = torch.tensor((), device=self.device)
                 logits_prob_all = torch.tensor((), device=self.device)  
-            
+                
                 for ecgs, ag, labels in self.val_dl:
                     ecgs = ecgs.to(self.device) # ECGs
                     ag = ag.to(self.device) # age and gender
@@ -199,25 +206,27 @@ class Training(object):
                         logits_prob_all = torch.cat((logits_prob_all, logits_prob), 0)
 
                 val_loss = val_loss / len(self.val_dl.dataset)
-                val_macro_avg_prec, val_micro_avg_prec, val_macro_auroc, val_micro_auroc = cal_multilabel_metrics(labels_all, logits_prob_all, self.args.labels, self.args.threshold)
-            
-                self.args.logger.info('                val loss:  {:<6.2f}   val micro auroc: {:<6.2f}   '.format(
+                val_macro_avg_prec, val_micro_avg_prec, val_macro_auroc, val_micro_auroc, val_challenge_metric = cal_multilabel_metrics(labels_all, logits_prob_all, self.args.labels, self.args.threshold)
+
+                self.args.logger.info('                val loss:  {:<6.2f}   val micro auroc: {:<6.2f}    val challenge metric:  {:<6.2f}'.format(
                     val_loss,
-                    val_micro_auroc))
+                    val_micro_auroc,
+                    val_challenge_metric))
                 
                 history['val_loss'].append(val_loss)
                 history['val_micro_auroc'].append(val_micro_auroc)
                 history['val_micro_avg_prec'].append(val_micro_avg_prec)         
                 history['val_macro_auroc'].append(val_macro_auroc)  
                 history['val_macro_avg_prec'].append(val_macro_avg_prec)
-
-            # --------------------------------------------------------------------
+                history['val_challenge_metric'].append(val_challenge_metric)
+                
 
             # Create ROC Curves at the beginning, middle and end of training
             if epoch == 1 or epoch == self.args.epochs/2 or epoch == self.args.epochs:
-                roc_curves(labels_all, logits_prob_all, self.args.labels, epoch, self.args.roc_save_dir)
+                phase = 'val' if self.args.val_path is not None else 'train'
+                roc_curves(labels_all, logits_prob_all, self.args.labels, epoch, self.args.roc_save_dir, phase)
 
-            # Save a model at every 5th epoch (backup)
+            # Save a model at every 5th epoch
             if epoch in list(range(self.args.epochs)[0::5]):
                 self.args.logger.info('Saved model at the epoch {}!'.format(epoch))
                 # Whether or not you use data parallelism, save the state dictionary this way
@@ -279,7 +288,7 @@ class Training(object):
             del logits_prob_all
             del labels_all
             torch.cuda.empty_cache()
-         
+          
         # END OF TRAINING LOOP        
         
         end_time_sec       = time.time()

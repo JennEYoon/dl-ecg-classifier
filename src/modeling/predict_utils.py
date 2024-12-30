@@ -35,7 +35,8 @@ class Predicting(object):
 
         # Load the test data
         testing_set = ECGDataset(self.args.test_path, 
-                                 get_transforms(dataset_type='test'))
+                                 get_transforms(dataset_type='test', precision=self.args.precision), 
+                                 self.args.filter_bandwidth)
         channels = testing_set.channels
         self.test_dl = DataLoader(testing_set,
                                   batch_size=1,
@@ -44,8 +45,8 @@ class Predicting(object):
                                   drop_last=True)
         
         # Load the trained model
-        self.model = resnet18(in_channel=channels,
-                         out_channel=len(self.args.labels))
+        self.model = resnet18(in_channel=channels, 
+                              out_channel=len(self.args.labels))
         self.model.load_state_dict(torch.load(self.args.model_path, map_location=self.device))
 
         self.sigmoid = nn.Sigmoid()
@@ -65,6 +66,7 @@ class Predicting(object):
         history['test_micro_auroc'] = 0.0
         history['test_macro_avg_prec'] = 0.0
         history['test_macro_auroc'] = 0.0
+        history['test_challenge_metric'] = 0.0
         
         history['labels'] = self.args.labels
         history['test_csv'] = self.args.test_path
@@ -92,14 +94,16 @@ class Predicting(object):
             if i % 1000 == 0:
                 self.args.logger.info('{:<4}/{:>4} predictions made'.format(i+1, len(self.test_dl)))
 
+
         # Predicting metrics
-        test_macro_avg_prec, test_micro_avg_prec, test_macro_auroc, test_micro_auroc = cal_multilabel_metrics(labels_all, logits_prob_all, self.args.labels, self.args.threshold)
+        test_macro_avg_prec, test_micro_avg_prec, test_macro_auroc, test_micro_auroc, test_challenge_metric = cal_multilabel_metrics(labels_all, logits_prob_all, self.args.labels, self.args.threshold)
         
-        self.args.logger.info('macro avg prec: {:<6.2f} micro avg prec: {:<6.2f} macro auroc: {:<6.2f} micro auroc: {:<6.2f} '.format(
+        self.args.logger.info('macro avg prec: {:<6.2f} micro avg prec: {:<6.2f} macro auroc: {:<6.2f} micro auroc: {:<6.2f} challenge metric: {:<6.2f}'.format(
             test_macro_avg_prec,
             test_micro_avg_prec,
             test_macro_auroc,
-            test_micro_auroc))
+            test_micro_auroc,
+            test_challenge_metric))
         
         # Draw ROC curve for predictions
         roc_curves(labels_all, logits_prob_all, self.args.labels, save_path = self.args.output_dir)
@@ -109,7 +113,8 @@ class Predicting(object):
         history['test_micro_avg_prec'] = test_micro_avg_prec
         history['test_macro_auroc'] = test_macro_auroc
         history['test_macro_avg_prec'] = test_macro_avg_prec
-     
+        history['test_challenge_metric'] = test_challenge_metric
+        
         # Save the history
         history_savepath = os.path.join(self.args.output_dir,
                                         self.args.yaml_file_name + '_test_history.pickle')

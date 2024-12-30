@@ -3,4 +3,5 @@ model: train_smoke.pth
 csv_path: stratified_smoke
 device_count: 1
 threshold: 0.5
-bandwidth:
+filter_bandwidth:
+precision:

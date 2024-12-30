@@ -21,7 +21,7 @@ def read_yaml(file, model_save_dir='', multiple=False):
     '''
 
     # Seed
-    seed = 123
+    seed = 2024
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -31,7 +31,7 @@ def read_yaml(file, model_save_dir='', multiple=False):
     torch.backends.cudnn.deterministic = True
     
     # Load yaml
-    print('Loading arguments from {}'.format(os.path.basename(file)))
+    print('Loading arguments from', os.path.basename(file))
     args = load_yaml(file)
 
     # Path where the needed CSV file exists
@@ -42,13 +42,27 @@ def read_yaml(file, model_save_dir='', multiple=False):
     args.val_path = os.path.join(csv_root, args.val_file) if args.val_file else None
     args.yaml_file_name = os.path.splitext(file)[0]
     args.yaml_file_name = os.path.basename(args.yaml_file_name)
-    
+
     if multiple:
         args.model_save_dir = model_save_dir
         args.roc_save_dir = os.path.join(os.getcwd(),'experiments', model_save_dir, 'ROC_' + args.yaml_file_name)
     else:
         args.model_save_dir = os.path.join(os.getcwd(),'experiments', args.yaml_file_name)
         args.roc_save_dir = os.path.join(os.getcwd(),'experiments', args.yaml_file_name, 'ROC_curves')
+
+    # Check whether the attributes considering ECG processing are set (correctly) in the yaml file
+    args.aug_type = args.aug_type if args.aug_type else None
+    args.precision = int(args.precision) if args.precision and int(args.precision) >= 0 else None
+    args.p1 = float(args.p1) if args.p1 and 0 <= float(args.p1) <= 1 else None
+    args.p2 = float(args.p2) if args.p2 and 0 <= float(args.p2) <= 1 else None
+    args.filter_bandwidth = args.filter_bandwidth if args.filter_bandwidth else None
+
+    # If cutoff frequencies set, correct the types of each element in the list [<cf>, <cf>]
+    if args.filter_bandwidth is not None:
+        a, b = args.filter_bandwidth
+        a = float(a) if isinstance(a, (int, float)) else None
+        b = float(b) if isinstance(b, (int, float)) else None
+        args.filter_bandwidth = [a, b]
     
     # Get labels from the train csv
     # The class labels start from the 4th index (exclude path, age, gender and fs)
@@ -77,8 +91,9 @@ def read_yaml(file, model_save_dir='', multiple=False):
     trainer = Training(args)
     trainer.setup()
     trainer.train() 
+    
 
-def read_multiple_yamls(path):
+def read_multiple_yamls(path, csv_root):
     ''' Read multiple yaml files from the given directory
     
     :param directory: Absolute path for the directory
@@ -93,7 +108,7 @@ def read_multiple_yamls(path):
     
     # Reading the yaml files and training models for each
     for file in yaml_files:
-        read_yaml(file, model_save_dir, True)
+        read_yaml(file, csv_root, model_save_dir, True)
 
 
 if __name__ == '__main__':
@@ -115,5 +130,3 @@ if __name__ == '__main__':
             
     else:
         raise Exception('No such file nor directory exists! Check the arguments.')
-
-    print('Done.')
