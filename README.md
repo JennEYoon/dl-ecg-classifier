@@ -7,6 +7,7 @@ The repository has been refactored for a more generalized approach to ECG analys
 There are three branches, each containining either the neural network pipeline or a script to run the benchmark models:
 - The `main` branch contains the ResNet pipeline.
 - The `benchmark_models` branch includes the Logistic regression model and the XGBoost model 
+- The `ecg_property_study` branch contains an updated ResNet pipeline that includes more sophisticated ECG data modification.
 - The `transformer_network` contains the Transformer pipeline.
 
 The two neural network pipelines are run similarly, as described below, using YAML files to read the training or testing configurations and CSV files to read the data. The Transformer model also incorporates handfracted features extracted from ECGs which are stored as CSV files in `data/features`. The benchmark models are run using the IPython Notebook script.
